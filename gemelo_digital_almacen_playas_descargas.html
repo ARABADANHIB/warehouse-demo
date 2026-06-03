@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S-RT Twin: Gemelo Digital de Almacén Realista 3D</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #030408;
+            color: #f3f4f6;
+            overflow: hidden;
+        }
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+        /* Cristalera Cyberpunk para paneles */
+        .glass-panel {
+            background: rgba(5, 8, 16, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(14, 165, 233, 0.15);
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glass-card-active {
+            background: rgba(14, 165, 233, 0.1);
+            border: 1px solid rgba(14, 165, 233, 0.4);
+            box-shadow: 0 0 15px rgba(14, 165, 233, 0.15);
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(5, 8, 16, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(14, 165, 233, 0.3);
+            border-radius: 2px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(14, 165, 233, 0.6);
+        }
+    </style>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body class="h-screen w-screen flex flex-col md:flex-row">
+
+    <!-- TERMINAL DE CONTROL LOGÍSTICO Y TELEMETRÍA -->
+    <aside class="w-full md:w-[440px] glass-panel border-b md:border-b-0 md:border-r border-sky-950 flex flex-col h-[40%] md:h-full z-10 shadow-2xl overflow-y-auto">
+        <!-- Cabecera de la Terminal -->
+        <div class="p-4 border-b border-sky-950/60 bg-gray-950/80 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
+            <div class="flex items-center gap-2.5">
+                <div class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                </div>
+                <div>
+                    <h1 class="text-xs font-black tracking-widest text-sky-400 font-orbitron">S-RT TWIN // ALMACÉN</h1>
+                    <p class="text-[9px] text-sky-500/70 font-semibold font-mono">STATUS: SIMULATION_RUNNING</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <span class="text-[9px] bg-sky-950/80 text-sky-300 border border-sky-700/50 px-2 py-0.5 rounded font-mono font-bold">GRID V3</span>
+            </div>
+        </div>
+
+        <!-- Indicadores Críticos del Sistema (KPIs) -->
+        <div class="p-3 grid grid-cols-4 gap-2 border-b border-sky-950/40 bg-sky-950/10">
+            <div class="glass-card p-2 rounded flex flex-col justify-between">
+                <span class="text-[8px] text-gray-500 font-bold uppercase tracking-wider">Flota</span>
+                <span id="kpi-active-forklifts" class="text-sm font-black text-cyan-400 font-orbitron">0 / 3</span>
+            </div>
+            <div class="glass-card p-2 rounded flex flex-col justify-between">
+                <span class="text-[8px] text-gray-500 font-bold uppercase tracking-wider">Eficiencia</span>
+                <span id="kpi-efficiency" class="text-sm font-black text-emerald-400 font-orbitron">98.2%</span>
+            </div>
+            <div class="glass-card p-2 rounded flex flex-col justify-between">
+                <span class="text-[8px] text-gray-500 font-bold uppercase tracking-wider">Picking/H</span>
+                <span id="kpi-moves" class="text-sm font-black text-purple-400 font-orbitron">204</span>
+            </div>
+            <div class="glass-card p-2 rounded flex flex-col justify-between">
+                <span class="text-[8px] text-gray-500 font-bold uppercase tracking-wider">Ocupación</span>
+                <span id="kpi-occupancy" class="text-sm font-black text-amber-400 font-orbitron">65%</span>
+            </div>
+        </div>
+
+        <!-- Panel de Mensajes en Vivo (RFID & LiDAR scanner feeds) -->
+        <div class="p-3 border-b border-sky-950/40 bg-black/40">
+            <div class="flex items-center justify-between mb-1.5">
+                <span class="text-[9px] font-bold text-sky-500 uppercase tracking-widest font-mono"><i class="fa-solid fa-barcode mr-1"></i> Scanner RFID en Vivo</span>
+                <span class="text-[8px] text-gray-600 font-mono">feed: 13.56MHz</span>
+            </div>
+            <div id="rfid-scanner-feed" class="bg-gray-950/80 p-2 rounded border border-sky-950/40 font-mono text-[9px] text-cyan-500 h-11 overflow-hidden flex flex-col justify-center">
+                <p class="animate-pulse">&gt; ESCANEANDO ENTRADAS/SALIDAS RFID...</p>
+            </div>
+        </div>
+
+        <!-- Listado de Equipos Inteligentes (Tracking Activo) -->
+        <div class="p-4 flex-1">
+            <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center justify-between font-orbitron">
+                <span>Rastreo Activo de Equipos</span>
+                <span class="text-[9px] text-sky-400 font-mono lowercase">telemetry_mode</span>
+            </h2>
+            <div id="forklift-list-container" class="space-y-3">
+                <!-- Se inyecta por JS -->
+            </div>
+
+            <!-- Controles Técnicos del Entorno -->
+            <div class="mt-6 pt-4 border-t border-sky-950/50 space-y-4">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider font-orbitron">Configuración de Visualización</h3>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-render-points" class="py-1.5 px-3 rounded text-xs font-medium bg-cyan-900/40 border border-cyan-500 text-cyan-200 hover:bg-cyan-900/60 transition-all font-mono">
+                        <i class="fa-solid fa-braille mr-1"></i> Nube LiDAR
+                    </button>
+                    <button id="btn-render-solid" class="py-1.5 px-3 rounded text-xs font-medium bg-gray-950 border border-transparent text-gray-500 hover:bg-gray-900 hover:text-white transition-all font-mono">
+                        <i class="fa-solid fa-cubes mr-1"></i> Sólidos
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-xs text-gray-400 mb-1">
+                        <span class="font-mono text-[10px]">Tasa de Refresco IoT</span>
+                        <span id="label-iot-speed" class="text-cyan-400 font-mono">1.0x</span>
+                    </div>
+                    <input id="slider-iot-speed" type="range" min="0.1" max="3" step="0.1" value="1" class="w-full h-1 bg-sky-950 rounded-lg appearance-none cursor-pointer accent-cyan-500">
+                </div>
+
+                <button id="btn-trigger-mission" class="w-full bg-gradient-to-r from-cyan-600 to-sky-700 hover:from-cyan-500 hover:to-sky-600 text-white font-bold py-2.5 px-4 rounded text-xs transition-all duration-350 flex items-center justify-center gap-2 shadow-lg shadow-sky-950/50">
+                    <i class="fa-solid fa-truck-moving"></i> Desencadenar Orden de Picking (WMS)
+                </button>
+            </div>
+        </div>
+
+        <!-- Pie Técnico -->
+        <div class="p-3 bg-gray-950/90 border-t border-sky-950/60 flex justify-between items-center text-[9px] text-gray-600 font-mono mt-auto">
+            <span>SISTEMA DE SEGURIDAD NBR: COMPILADO</span>
+            <span>FPS: <span id="fps-counter" class="text-emerald-500">60</span></span>
+        </div>
+    </aside>
+
+    <!-- ESCENARIO 3D INTERACTIVO -->
+    <main class="flex-1 relative h-[60%] md:h-full w-full">
+        <div id="canvas-container" class="w-full h-full absolute inset-0"></div>
+
+        <!-- Notificaciones de Eventos -->
+        <div class="absolute top-4 right-4 z-10 flex flex-col gap-2 max-w-sm pointer-events-none" id="notification-area"></div>
+
+        <!-- Widget de Cámara -->
+        <div class="absolute bottom-4 right-4 z-10 bg-gray-950/90 backdrop-blur-md border border-sky-950/50 p-3 rounded-lg text-xs pointer-events-none shadow-2xl">
+            <div class="flex items-center gap-3">
+                <div class="flex flex-col">
+                    <span class="text-gray-500 text-[8px] uppercase font-bold tracking-wider font-orbitron">Coordenadas del Domo</span>
+                    <span id="camera-pos-info" class="font-mono text-cyan-400 text-[10px]">X: 0, Y: 0, Z: 0</span>
+                </div>
+                <div class="w-px h-6 bg-sky-950"></div>
+                <button id="btn-reset-cam" class="pointer-events-auto text-sky-400 hover:text-white transition">
+                    <i class="fa-solid fa-expand text-sm" title="Restablecer Vista General"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Leyenda Realista de Áreas -->
+        <div class="absolute bottom-4 left-4 z-10 bg-gray-950/95 backdrop-blur-md border border-sky-950/50 p-3.5 rounded-lg text-[10px] text-gray-400 pointer-events-none hidden sm:block shadow-2xl">
+            <p class="font-black mb-2 uppercase tracking-widest text-sky-300 font-orbitron border-b border-sky-950/50 pb-1">Zonificación de Planta</p>
+            <div class="space-y-1.5 font-mono">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-2 bg-yellow-500/70 border border-yellow-400 inline-block rounded-sm"></span>
+                    <span>Playa de Recogida (Inbound Stage)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-2 bg-cyan-500/20 border border-cyan-400/80 inline-block rounded-sm"></span>
+                    <span>Zona de Racks de Almacenamiento</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-2 bg-purple-500/70 border border-purple-400 inline-block rounded-sm"></span>
+                    <span>Playa de Consolidación (Outbound Stage)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-0.5 bg-cyan-400 inline-block"></span>
+                    <span>Rutas Seguras de Navegación Vehicular</span>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Configuración global de ThreeJS
+        let scene, camera, renderer, controls;
+        let pointsSystem, solidGroup;
+        let pointMode = true; 
+        let simulationSpeed = 1.0;
+        let selectedForkliftId = null;
+        let lastTime = 0;
+        let frameCount = 0;
+        let lastFpsUpdate = 0;
+
+        // Estructura dimensional del Almacén Realista (90m de ancho x 50m de fondo)
+        const W_WIDTH = 90;
+        const W_DEPTH = 50;
+        const W_HEIGHT = 12;
+
+        // Base de Datos de SKUs del Almacén con descripciones completas
+        const cargoDatabase = [
+            { sku: 'SKU-BAT-9901', name: 'Módulos de Celda Litio-Ion 48V', desc: 'Baterías de Litio de Alta Densidad para tracción eléctrica', color: 0x10b981 },
+            { sku: 'SKU-MOT-4420', name: 'Motor Eléctrico Brushless AC 15kW', desc: 'Accionamiento síncrono trifásico industrial de alta eficiencia', color: 0x3b82f6 },
+            { sku: 'SKU-CAB-0891', name: 'Bobina Cobre Recocido Ultra-Puro', desc: 'Conductor electrolítico bobinado para alta conductividad térmica', color: 0xa855f7 },
+            { sku: 'SKU-DIS-7712', name: 'Disipador Aluminio Anodizado Extruido', desc: 'Componentes de refrigeración térmica pasiva para inversores', color: 0xf97316 },
+            { sku: 'SKU-PLC-3310', name: 'Controlador Lógico Programable S7-1500', desc: 'PLC industrial avanzado con módulos de E/S analógicas integrados', color: 0xef4444 },
+            { sku: 'SKU-LED-5524', name: 'Campana LED Industrial IP66 200W', desc: 'Luminaria eficiente de alta bahía para entornos logísticos duros', color: 0x14b8a6 },
+            { sku: 'SKU-ABS-1102', name: 'Filamento Polímero Termoplástico ABS', desc: 'Bobinas de materia prima de ingeniería para extrusión industrial 3D', color: 0xec4899 }
+        ];
+
+        // --- DEFINICIÓN DE CARRILES Y NAVEGACIÓN SEGURA ---
+        // Pasillos transversales (Eje X) seguros (Fuera de las estanterías)
+        // Pasillos longitudinales (Eje Z) seguros
+        const safeXLanes = [-34, -18, -2, 14, 28, 38];
+        const safeZLines = [-20, -10, 0, 10, 20];
+
+        // Ubicaciones geográficas de las Playas de Recogida y Despacho
+        const inboundBeachX = -32;
+        const inboundBeachZLines = [-12, 0, 12]; // Playas de Entrada
+
+        const outboundBeachX = 28;
+        const outboundBeachZLines = [-12, 0, 12]; // Playas de Salida
+
+        // Flota de Carretillas Elevadoras Inteligentes (Linde, Toyota y Jungheinrich)
+        const forklifts = [
+            {
+                id: 'FORK-01',
+                name: 'Linde E25 Roadster (LiDAR Activo)',
+                x: -34,
+                z: -12,
+                y: 0,
+                angle: 0,
+                color: 0xfacc15,
+                colorHex: '#facc15',
+                status: 'IDLE',
+                payload: null,
+                target: null,
+                speed: 6.8,
+                path: [],
+                currentPathIndex: 0,
+                totalTrips: 8,
+                battery: 92,
+                mesh: null,
+                pointsObj: null,
+                lidarPoints: null,
+                sensorRange: 12,
+                routeLine: null
+            },
+            {
+                id: 'FORK-02',
+                name: 'Toyota Traigo 80 Heavy-Duty',
+                x: -2,
+                z: 20,
+                y: 0,
+                angle: Math.PI,
+                color: 0xf97316,
+                colorHex: '#f97316',
+                status: 'IDLE',
+                payload: null,
+                target: null,
+                speed: 6.2,
+                path: [],
+                currentPathIndex: 0,
+                totalTrips: 11,
+                battery: 81,
+                mesh: null,
+                pointsObj: null,
+                lidarPoints: null,
+                sensorRange: 10,
+                routeLine: null
+            },
+            {
+                id: 'FORK-03',
+                name: 'Jungheinrich EFG 430 ReachTruck',
+                x: 28,
+                z: -12,
+                y: 0,
+                angle: Math.PI / 2,
+                color: 0x0ea5e9,
+                colorHex: '#0ea5e9',
+                status: 'IDLE',
+                payload: null,
+                target: null,
+                speed: 7.0,
+                path: [],
+                currentPathIndex: 0,
+                totalTrips: 6,
+                battery: 87,
+                mesh: null,
+                pointsObj: null,
+                lidarPoints: null,
+                sensorRange: 11,
+                routeLine: null
+            }
+        ];
+
+        const shelves = [];
+        const palets = []; // Palets colocados en Racks
+        let inboundPallets = []; // Palets esperando en Playa de Entrada
+        let outboundPallets = []; // Palets esperando en Playa de Salida
+
+        // Helper para crear la geometría exacta de un palet con su bulto
+        function createPalletVisual(cargoColor) {
+            const pGroup = new THREE.Group();
+
+            // Base de madera
+            const woodGeo = new THREE.BoxGeometry(2.1, 0.15, 1.7);
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x7c2d12, roughness: 0.8 }); // Café madera
+            const wood = new THREE.Mesh(woodGeo, woodMat);
+            wood.position.y = 0.075;
+            pGroup.add(wood);
+
+            // Bulto (Mercancía)
+            const cargoGeo = new THREE.BoxGeometry(1.9, 1.1, 1.5);
+            const cargoMat = new THREE.MeshStandardMaterial({ color: cargoColor, roughness: 0.5 });
+            const cargo = new THREE.Mesh(cargoGeo, cargoMat);
+            cargo.position.y = 0.7;
+            cargo.castShadow = true;
+            pGroup.add(cargo);
+
+            return pGroup;
+        }
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020306);
+            scene.fog = new THREE.FogExp2(0x020306, 0.014);
+
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(-55, 38, 55);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 - 0.05;
+            controls.minDistance = 10;
+            controls.maxDistance = 200;
+
+            // Iluminación industrial clara y contrastada
+            const ambient = new THREE.AmbientLight(0x0b132b, 1.6);
+            scene.add(ambient);
+
+            const directLight1 = new THREE.DirectionalLight(0x38bdf8, 1.8);
+            directLight1.position.set(-30, 45, 10);
+            directLight1.castShadow = true;
+            scene.add(directLight1);
+
+            const directLight2 = new THREE.DirectionalLight(0x0284c7, 1.2);
+            directLight2.position.set(30, 45, -10);
+            directLight2.castShadow = true;
+            scene.add(directLight2);
+
+            // Luz táctica de guía en pasillos
+            const neonBlue = new THREE.PointLight(0x0ea5e9, 2.5, 50);
+            neonBlue.position.set(0, 8, 0);
+            scene.add(neonBlue);
+
+            // Generar estructura de base de datos de estanterías (Racks)
+            createShelvesData();
+
+            // Construir el Almacén Completo en 3D
+            buildWarehouseWorld();
+
+            // Suministrar carretillas
+            buildForklifts();
+
+            // Conectar controladores de pantalla
+            setupUIEvents();
+            updateForkliftUI();
+
+            // Bucle autónomo de asignación de pedidos
+            setInterval(generateAutomaticMission, 5000);
+
+            window.addEventListener('resize', onWindowResize);
+
+            lastTime = performance.now();
+            animate();
+        }
+
+        // --- MODELADO DE LA PLANTA DEL ALMACÉN ---
+
+        function createShelvesData() {
+            // Estanterías organizadas en el centro del almacén: X = -10, 0, 10, Z = [-16 a 16]
+            const rackRowsX = [-10, 6, 18]; // 3 grandes bloques longitudinales dobles
+            const sectionsPerRack = 5;
+            const levels = 4;
+
+            rackRowsX.forEach((xPos, rackIdx) => {
+                for (let sec = 0; sec < sectionsPerRack; sec++) {
+                    const zPos = -16 + sec * 8.0; // Espaciado entre bastidores en eje Z
+                    for (let lvl = 0; lvl < levels; lvl++) {
+                        const yPos = 1.0 + lvl * 2.3; // Altura de los travesaños
+                        
+                        // Dos posiciones laterales de almacenamiento por nivel
+                        for (let side = 0; side < 2; side++) {
+                            const zOffset = side * 2.6 - 1.3;
+                            const shelfId = `RACK-${rackIdx}-S${sec}-L${lvl}-P${side}`;
+                            
+                            // 55% de ocupación de inventario inicial
+                            const isOccupied = Math.random() < 0.55;
+                            const cargoData = isOccupied ? cargoDatabase[Math.floor(Math.random() * cargoDatabase.length)] : null;
+
+                            shelves.push({
+                                id: shelfId,
+                                x: xPos,
+                                y: yPos,
+                                z: zPos + zOffset,
+                                occupied: isOccupied,
+                                cargo: cargoData
+                            });
+                        }
+                    }
+                }
+            });
+
+            const totalSlots = shelves.length;
+            const occupiedSlots = shelves.filter(s => s.occupied).length;
+            document.getElementById('kpi-occupancy').innerText = `${Math.round((occupiedSlots / totalSlots) * 100)}%`;
+        }
+
+        function buildWarehouseWorld() {
+            solidGroup = new THREE.Group();
+            scene.add(solidGroup);
+
+            const pointVertices = [];
+            const pointColors = [];
+            const infraColor = new THREE.Color(0x38bdf8);
+
+            // Inyectar puntos procedimentales para el escaneo LiDAR
+            function addBoxPoints(x, y, z, w, h, d, density = 50, color = infraColor) {
+                for (let i = 0; i < density; i++) {
+                    const edge = Math.floor(Math.random() * 3);
+                    let px = x + (Math.random() - 0.5) * w;
+                    let py = y + (Math.random() - 0.5) * h;
+                    let pz = z + (Math.random() - 0.5) * d;
+
+                    if (edge === 0) px = x + (Math.random() < 0.5 ? -0.5 : 0.5) * w;
+                    else if (edge === 1) py = y + (Math.random() < 0.5 ? -0.5 : 0.5) * h;
+                    else pz = z + (Math.random() < 0.5 ? -0.5 : 0.5) * d;
+
+                    pointVertices.push(px, py, pz);
+                    pointColors.push(color.r, color.g, color.b);
+                }
+            }
+
+            // 1. PINTADO DEL SUELO INDUSTRIAL (Sólido y cuadrícula de puntos)
+            const floorGeo = new THREE.PlaneGeometry(W_WIDTH, W_DEPTH);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x0a0f1d,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            solidGroup.add(floor);
+
+            // Red de puntos LiDAR en el suelo
+            const step = 2.0;
+            for (let x = -W_WIDTH/2; x <= W_WIDTH/2; x += step) {
+                for (let z = -W_DEPTH/2; z <= W_DEPTH/2; z += step) {
+                    pointVertices.push(x, 0, z);
+                    const dist = Math.sqrt(x*x + z*z) / 60;
+                    pointColors.push(Math.max(0.01, 0.04 - dist * 0.02), Math.max(0.04, 0.15 - dist * 0.05), Math.max(0.1, 0.3 - dist * 0.1));
+                }
+            }
+
+            // 2. PLAYA DE ENTRADA (Zona de Recepción y Estacionamiento - Oeste)
+            // Delimitamos la playa dedicada en X = -32, con marcas viales amarillas
+            inboundBeachZLines.forEach((z, idx) => {
+                const areaGeo = new THREE.BoxGeometry(4.5, 0.02, 6.0);
+                const areaMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.6 }); // Amarillo
+                const areaMesh = new THREE.Mesh(areaGeo, areaMat);
+                areaMesh.position.set(inboundBeachX, 0.01, z);
+                solidGroup.add(areaMesh);
+
+                // Generar Palets de recepción iniciales
+                const randCargo = cargoDatabase[idx % cargoDatabase.length];
+                const pMesh = createPalletVisual(randCargo.color);
+                pMesh.position.set(inboundBeachX, 0.1, z);
+                solidGroup.add(pMesh);
+
+                inboundPallets.push({
+                    id: `INBOUND-PAL-${idx}-${Date.now()}`,
+                    x: inboundBeachX,
+                    z: z,
+                    cargo: randCargo,
+                    mesh: pMesh
+                });
+
+                // Añadir firmas de puntos
+                addBoxPoints(inboundBeachX, 0.1, z, 4.5, 0.1, 6.0, 90, new THREE.Color(0xeab308));
+            });
+
+            // 3. PLAYA DE SALIDA (Zona de Expedición y Consolidación - Este)
+            // Delimitamos la playa dedicada en X = 28, con marcas de color púrpura
+            outboundBeachZLines.forEach((z, idx) => {
+                const areaGeo = new THREE.BoxGeometry(4.5, 0.02, 6.0);
+                const areaMat = new THREE.MeshStandardMaterial({ color: 0xa855f7, roughness: 0.6 }); // Púrpura consolidación
+                const areaMesh = new THREE.Mesh(areaGeo, areaMat);
+                areaMesh.position.set(outboundBeachX, 0.01, z);
+                solidGroup.add(areaMesh);
+
+                addBoxPoints(outboundBeachX, 0.1, z, 4.5, 0.1, 6.0, 90, new THREE.Color(0xa855f7));
+            });
+
+            // 4. CAMIONES INDUSTRIALES APARCADO EN DÁRSENAS (Docks de Salida - Extremo Este)
+            const truckZ = [-12, 12];
+            truckZ.forEach((z, idx) => {
+                const truckGroup = new THREE.Group();
+                truckGroup.position.set(43, 0, z);
+
+                // Caja del Remolque
+                const boxGeo = new THREE.BoxGeometry(11, 4.0, 3.4);
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.4 });
+                const box = new THREE.Mesh(boxGeo, boxMat);
+                box.position.set(0, 2.1, 0);
+                box.castShadow = true;
+                truckGroup.add(box);
+
+                // Cabina
+                const cabGeo = new THREE.BoxGeometry(2.8, 3.4, 3.2);
+                const cabMat = new THREE.MeshStandardMaterial({ color: idx === 0 ? 0xef4444 : 0x0ea5e9 });
+                const cab = new THREE.Mesh(cabGeo, cabMat);
+                cab.position.set(6.8, 1.8, 0);
+                cab.castShadow = true;
+                truckGroup.add(cab);
+
+                // Ruedas
+                const wheelGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.6, 16);
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x030712 });
+                const wheels = [
+                    {x:-3.5, z: 1.7}, {x:-3.5, z: -1.7},
+                    {x:-1.8, z: 1.7}, {x:-1.8, z: -1.7},
+                    {x:4.0, z: 1.7}, {x:4.0, z: -1.7},
+                    {x:5.8, z: 1.7}, {x:5.8, z: -1.7}
+                ];
+                wheels.forEach(pos => {
+                    const w = new THREE.Mesh(wheelGeo, wheelMat);
+                    w.rotation.x = Math.PI / 2;
+                    w.position.set(pos.x, 0.7, pos.z);
+                    truckGroup.add(w);
+                });
+
+                solidGroup.add(truckGroup);
+
+                // Nube LiDAR del Camión
+                addBoxPoints(43, 2.1, z, 11, 4.0, 3.4, 130, new THREE.Color(0x374151));
+                addBoxPoints(49.8, 1.8, z, 2.8, 3.4, 3.2, 70, new THREE.Color(idx === 0 ? 0xef4444 : 0x0ea5e9));
+            });
+
+            // 5. ESTANTERÍAS METÁLICAS (RACKS) E INVENTARIO
+            const rackRowsX = [-10, 6, 18];
+            rackRowsX.forEach(x => {
+                // Soportes y travesaños
+                for (let level = 1; level <= 4; level++) {
+                    const h = level * 2.3;
+                    const vigaGeo = new THREE.BoxGeometry(0.12, 0.12, 36);
+                    const vigaMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 });
+                    
+                    const vigaF = new THREE.Mesh(vigaGeo, vigaMat);
+                    vigaF.position.set(x - 1.0, h, 0);
+                    solidGroup.add(vigaF);
+
+                    const vigaB = vigaF.clone();
+                    vigaB.position.x = x + 1.0;
+                    solidGroup.add(vigaB);
+
+                    addBoxPoints(x - 1.0, h, 0, 0.12, 0.12, 36, 110);
+                    addBoxPoints(x + 1.0, h, 0, 0.12, 0.12, 36, 110);
+                }
+
+                // Marcos Verticales del bastidor
+                for (let z = -18; z <= 18; z += 8.0) {
+                    const frameGeo = new THREE.BoxGeometry(2.1, W_HEIGHT, 0.2);
+                    const frameMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9 }); // Azul industrial
+                    const frame = new THREE.Mesh(frameGeo, frameMat);
+                    frame.position.set(x, W_HEIGHT/2, z);
+                    solidGroup.add(frame);
+
+                    addBoxPoints(x, W_HEIGHT/2, z, 2.1, W_HEIGHT, 0.2, 80, new THREE.Color(0x0ea5e9));
+                }
+            });
+
+            // 6. INVENTARIO FÍSICO INICIAL EN LOS RACKS
+            shelves.forEach(slot => {
+                if (slot.occupied && slot.cargo) {
+                    const pMesh = createPalletVisual(slot.cargo.color);
+                    pMesh.position.set(slot.x, slot.y, slot.z);
+                    pMesh.name = `PALET-${slot.id}`;
+                    solidGroup.add(pMesh);
+
+                    palets.push({
+                        id: slot.id,
+                        shelfId: slot.id,
+                        mesh: pMesh,
+                        cargo: slot.cargo,
+                        x: slot.x,
+                        y: slot.y,
+                        z: slot.z
+                    });
+
+                    // Añadir firma LiDAR de la mercancía
+                    addBoxPoints(slot.x, slot.y + 0.6, slot.z, 2.0, 1.2, 1.6, 35, new THREE.Color(slot.cargo.color));
+                }
+            });
+
+            // Enlazar buffer global de puntos LiDAR
+            const pointsGeo = new THREE.BufferGeometry();
+            pointsGeo.setAttribute('position', new THREE.Float32BufferAttribute(pointVertices, 3));
+            pointsGeo.setAttribute('color', new THREE.Float32BufferAttribute(pointColors, 3));
+
+            const pointsMat = new THREE.PointsMaterial({
+                size: 0.18,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                sizeAttenuation: true
+            });
+
+            pointsSystem = new THREE.Points(pointsGeo, pointsMat);
+            scene.add(pointsSystem);
+
+            toggleRenderMode(true);
+        }
+
+        // --- MODELADO DE FLOTA VEHICULAR ---
+
+        function buildForklifts() {
+            forklifts.forEach(f => {
+                // Modelo Sólido de la Máquina
+                const carGroup = new THREE.Group();
+                carGroup.position.set(f.x, 0, f.z);
+                carGroup.rotation.y = f.angle;
+
+                const bodyGeo = new THREE.BoxGeometry(1.6, 1.0, 3.0);
+                const bodyMat = new THREE.MeshStandardMaterial({ color: f.color, roughness: 0.3 });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.position.y = 0.7;
+                body.castShadow = true;
+                carGroup.add(body);
+
+                // Jaula antivuelco
+                const cabinGeo = new THREE.BoxGeometry(1.3, 1.4, 1.6);
+                const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, wireframe: true });
+                const cabin = new THREE.Mesh(cabinGeo, cabinMat);
+                cabin.position.set(0, 1.9, -0.25);
+                carGroup.add(cabin);
+
+                // Ruedas
+                const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.42, 16);
+                const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+                const wheels = [
+                    {x: 0.85, y: 0.42, z: 0.95},
+                    {x: -0.85, y: 0.42, z: 0.95},
+                    {x: 0.85, y: 0.42, z: -0.95},
+                    {x: -0.85, y: 0.42, z: -0.95}
+                ];
+                wheels.forEach(pos => {
+                    const w = new THREE.Mesh(wheelGeo, wheelMat);
+                    w.rotation.z = Math.PI / 2;
+                    w.position.set(pos.x, pos.y, pos.z);
+                    w.castShadow = true;
+                    carGroup.add(w);
+                });
+
+                // Mástil vertical de elevación
+                const mastGeo = new THREE.BoxGeometry(0.18, 3.4, 0.1);
+                const mastMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 });
+                const mastL = new THREE.Mesh(mastGeo, mastMat);
+                mastL.position.set(0.35, 1.7, 1.55);
+                const mastR = mastL.clone();
+                mastR.position.x = -0.35;
+                carGroup.add(mastL);
+                carGroup.add(mastR);
+
+                // Horquillas portadoras (Forks)
+                const forkBaseGroup = new THREE.Group();
+                forkBaseGroup.position.set(0, 0.2, 1.6);
+
+                const plateGeo = new THREE.BoxGeometry(0.9, 0.5, 0.1);
+                const plate = new THREE.Mesh(plateGeo, mastMat);
+                plate.position.y = 0.25;
+                forkBaseGroup.add(plate);
+
+                const prongGeo = new THREE.BoxGeometry(0.1, 0.05, 1.3);
+                const prongMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9 });
+                const prongL = new THREE.Mesh(prongGeo, prongMat);
+                prongL.position.set(0.25, 0.02, 0.65);
+                const prongR = prongL.clone();
+                prongR.position.x = -0.25;
+                forkBaseGroup.add(prongL);
+                forkBaseGroup.add(prongR);
+
+                carGroup.add(forkBaseGroup);
+                solidGroup.add(carGroup);
+                f.mesh = carGroup;
+                f.forkGroup = forkBaseGroup;
+
+                // Nube de puntos dinámica propia de la máquina
+                const pVertices = [];
+                const pColors = [];
+                const vColor = new THREE.Color(f.color);
+                for (let i = 0; i < 180; i++) {
+                    pVertices.push(
+                        (Math.random() - 0.5) * 1.6,
+                        Math.random() * 2.5,
+                        (Math.random() - 0.5) * 3.0
+                    );
+                    pColors.push(vColor.r, vColor.g, vColor.b);
+                }
+                const fPointsGeo = new THREE.BufferGeometry();
+                fPointsGeo.setAttribute('position', new THREE.Float32BufferAttribute(pVertices, 3));
+                fPointsGeo.setAttribute('color', new THREE.Float32BufferAttribute(pColors, 3));
+                const fPointsMat = new THREE.PointsMaterial({ size: 0.22, vertexColors: true, transparent: true, opacity: 0.9 });
+                const fPointsObj = new THREE.Points(fPointsGeo, fPointsMat);
+                scene.add(fPointsObj);
+                f.pointsObj = fPointsObj;
+
+                // Cono holográfico sensor LiDAR
+                const sensorGeo = new THREE.CylinderGeometry(f.sensorRange, f.sensorRange, 0.2, 32, 1, true);
+                const sensorMat = new THREE.MeshBasicMaterial({ color: 0x0ea5e9, wireframe: true, transparent: true, opacity: 0.02 });
+                const sensorVisual = new THREE.Mesh(sensorGeo, sensorMat);
+                sensorVisual.position.set(0, 1.8, 0);
+                carGroup.add(sensorVisual);
+
+                // Rayos LiDAR visuales
+                const lineMat = new THREE.LineBasicMaterial({ color: 0xf43f5e, transparent: true, opacity: 0.45 });
+                const lineGeo = new THREE.BufferGeometry();
+                const linePositions = new Float32Array(24 * 3 * 2);
+                lineGeo.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
+                const lidarLines = new THREE.LineSegments(lineGeo, lineMat);
+                scene.add(lidarLines);
+                f.lidarPoints = lidarLines;
+
+                // Línea reflectora de ruta programada
+                const routeMat = new THREE.LineBasicMaterial({ color: f.color, transparent: true, opacity: 0.65, linewidth: 2 });
+                const routeGeo = new THREE.BufferGeometry();
+                f.routeLine = new THREE.Line(routeGeo, routeMat);
+                scene.add(f.routeLine);
+            });
+        }
+
+        // --- ALGORITMO DETALLADO DE RUTA SEGURA (No colisión con Racks) ---
+        // Retorna un conjunto de nodos intermedios que transcurren exclusivamente por las calles permitidas
+        function getOptimizedPath(startX, startZ, endX, endZ) {
+            const path = [];
+
+            // Añadir punto de partida
+            path.push({ x: startX, z: startZ });
+
+            // 1. Identificar el carril vertical (Eje X) seguro más cercano al origen
+            let startSafeX = safeXLanes[0];
+            let minXDiff = Math.abs(startX - startSafeX);
+            safeXLanes.forEach(laneX => {
+                const diff = Math.abs(startX - laneX);
+                if (diff < minXDiff) {
+                    minXDiff = diff;
+                    startSafeX = laneX;
+                }
+            });
+
+            // 2. Identificar el carril vertical (Eje X) seguro más cercano al destino
+            let endSafeX = safeXLanes[0];
+            let minEndXDiff = Math.abs(endX - endSafeX);
+            safeXLanes.forEach(laneX => {
+                const diff = Math.abs(endX - laneX);
+                if (diff < minEndXDiff) {
+                    minEndXDiff = diff;
+                    endSafeX = laneX;
+                }
+            });
+
+            // Si el punto de partida y el destino ya están en el mismo pasillo vertical seguro,
+            // viajamos directamente de forma vertical a lo largo de Z para evitar rodeos innecesarios
+            if (startSafeX === endSafeX) {
+                if (startX !== startSafeX) path.push({ x: startSafeX, z: startZ });
+                path.push({ x: startSafeX, z: endZ });
+                path.push({ x: endX, z: endZ });
+                return path;
+            }
+
+            // Si tienen que cambiar de carril vertical (eje X), el cruce horizontal se realiza
+            // OBLIGATORIAMENTE por los pasillos perimetrales norte (Z = -20) o sur (Z = 20) que están libres de racks.
+            // Elegimos el pasillo perimetral que implique una distancia de viaje menor
+            let bypassZ = 20;
+            const distBypassNorth = Math.abs(startZ - (-20)) + Math.abs(endZ - (-20));
+            const distBypassSouth = Math.abs(startZ - 20) + Math.abs(endZ - 20);
+            
+            if (distBypassNorth < distBypassSouth) {
+                bypassZ = -20;
+            }
+
+            // Fase 1: Alinearse lateralmente con el carril vertical de partida
+            if (startX !== startSafeX) {
+                path.push({ x: startSafeX, z: startZ });
+            }
+
+            // Fase 2: Conducir en línea recta por el carril de origen hacia el pasillo de cruce seguro (Z exterior)
+            path.push({ x: startSafeX, z: bypassZ });
+
+            // Fase 3: Atravesar lateralmente por el pasillo perimetral libre de racks hasta el carril de destino
+            path.push({ x: endSafeX, z: bypassZ });
+
+            // Fase 4: Conducir en línea recta por el carril de destino hasta el Z final
+            path.push({ x: endSafeX, z: endZ });
+
+            // Fase 5: Entrar directamente de frente en el punto final (Playa, Rack o Camión)
+            if (endSafeX !== endX) {
+                path.push({ x: endX, z: endZ });
+            }
+
+            return path;
+        }
+
+        function renderPathLine(forklift) {
+            if (!forklift.path || forklift.path.length === 0) {
+                forklift.routeLine.visible = false;
+                return;
+            }
+
+            forklift.routeLine.visible = true;
+            const points = [];
+            points.push(new THREE.Vector3(forklift.x, 0.05, forklift.z));
+            
+            for (let i = forklift.currentPathIndex; i < forklift.path.length; i++) {
+                points.push(new THREE.Vector3(forklift.path[i].x, 0.05, forklift.path[i].z));
+            }
+
+            forklift.routeLine.geometry.setFromPoints(points);
+        }
+
+        // --- CONTROLADOR DE MISIONES Y LOGÍSTICA DE CARGA (WMS) ---
+
+        function generateAutomaticMission() {
+            const idleForklifts = forklifts.filter(f => f.status === 'IDLE');
+            if (idleForklifts.length === 0) return;
+
+            // Selección aleatoria de máquina disponible
+            const selectedFork = idleForklifts[Math.floor(Math.random() * idleForklifts.length)];
+
+            // Decisión inteligente: Entrada o Despacho
+            const isDelivery = Math.random() < 0.5;
+
+            if (isDelivery) {
+                // FLUJO A: PLAYA DE ENTRADA (Inbound Bay) -> ALMACENAMIENTO EN RACK LIBRE
+                if (inboundPallets.length === 0) return;
+
+                // Encontrar un hueco libre en los estantes
+                const freeSlots = shelves.filter(s => !s.occupied);
+                if (freeSlots.length === 0) return;
+
+                const targetSlot = freeSlots[Math.floor(Math.random() * freeSlots.length)];
+                targetSlot.occupied = true; // Apartar slot lógico
+
+                // Tomar primer pallet disponible de la playa
+                const originPallet = inboundPallets.shift();
+                targetSlot.cargo = originPallet.cargo;
+
+                // Trazar ruta óptima y segura
+                selectedFork.status = 'MOVING';
+                selectedFork.path = getOptimizedPath(selectedFork.x, selectedFork.z, originPallet.x, originPallet.z);
+                selectedFork.currentPathIndex = 0;
+
+                selectedFork.target = {
+                    stage: 1,
+                    type: 'PICK_BEACH',
+                    x: originPallet.x,
+                    z: originPallet.z,
+                    y: 0,
+                    slot: targetSlot,
+                    cargo: originPallet.cargo,
+                    palletMesh: originPallet.mesh
+                };
+
+                updateRFIDFeed(`LEIDO TAG RFID [${originPallet.cargo.sku}] EN PLAYA DE ENTRADA`);
+                showNotification(
+                    `Nueva Orden para ${selectedFork.id}`,
+                    `Mover <span class="font-bold text-sky-400">${originPallet.cargo.sku}</span> (${originPallet.cargo.name}) al Rack.`
+                );
+            } else {
+                // FLUJO B: PICKING DESDE RACK -> EXPEDICIÓN EN PLAYA DE SALIDA -> CARGA EN CAMIÓN
+                const occupiedSlots = shelves.filter(s => s.occupied && s.cargo);
+                if (occupiedSlots.length === 0) return;
+
+                // Tomar un bulto almacenado
+                const targetSlot = occupiedSlots[Math.floor(Math.random() * occupiedSlots.length)];
+                targetSlot.occupied = false; // Liberar hueco de la lógica
+
+                const pIndex = palets.findIndex(p => p.shelfId === targetSlot.id);
+                if (pIndex === -1) return;
+                const palletObj = palets[pIndex];
+
+                // Consolidar primero en un carril libre de la Playa de Salida (Expedición)
+                const targetOutboundZ = outboundBeachZLines[Math.floor(Math.random() * outboundBeachZLines.length)];
+
+                selectedFork.status = 'MOVING';
+                selectedFork.path = getOptimizedPath(
+                    selectedFork.x, 
+                    selectedFork.z, 
+                    targetSlot.x, 
+                    targetSlot.z > 0 ? targetSlot.z - 3.2 : targetSlot.z + 3.2 // Pararse enfrente
+                );
+                selectedFork.currentPathIndex = 0;
+
+                selectedFork.target = {
+                    stage: 1,
+                    type: 'PICK_RACK',
+                    x: targetSlot.x,
+                    z: targetSlot.z > 0 ? targetSlot.z - 3.2 : targetSlot.z + 3.2,
+                    y: targetSlot.y,
+                    slot: targetSlot,
+                    cargo: targetSlot.cargo,
+                    palletObj: palletObj,
+                    deliverX: outboundBeachX,
+                    deliverZ: targetOutboundZ
+                };
+
+                updateRFIDFeed(`SOLICITUD DE PICKING EMITIDA: SKU [${targetSlot.cargo.sku}]`);
+                showNotification(
+                    `Picking Asignado a ${selectedFork.id}`,
+                    `Recuperar <span class="font-bold text-purple-400">${targetSlot.cargo.sku}</span> para su consolidación.`
+                );
+            }
+
+            updateForkliftUI();
+        }
+
+        // --- MOTOR DE FÍSICA Y NAVEGACIÓN ---
+
+        function updatePhysics(delta) {
+            forklifts.forEach(f => {
+                let nodeReached = false;
+
+                if (f.path && f.path.length > 0 && f.currentPathIndex < f.path.length) {
+                    const targetNode = f.path[f.currentPathIndex];
+                    const dx = targetNode.x - f.x;
+                    const dz = targetNode.z - f.z;
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+
+                    if (dist > 0.4) {
+                        const targetAngle = Math.atan2(dx, dz);
+                        let diffAngle = targetAngle - f.angle;
+                        while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+                        while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+                        f.angle += diffAngle * 0.16;
+
+                        f.x += Math.sin(f.angle) * f.speed * delta;
+                        f.z += Math.cos(f.angle) * f.speed * delta;
+                        f.status = 'MOVING';
+                    } else {
+                        // Avanzar al siguiente nodo de la rejilla de seguridad
+                        f.currentPathIndex++;
+                        if (f.currentPathIndex >= f.path.length) {
+                            nodeReached = true;
+                        }
+                    }
+
+                    renderPathLine(f);
+                }
+
+                // Sincronizar coordenadas
+                if (f.mesh) {
+                    f.mesh.position.set(f.x, f.y, f.z);
+                    f.mesh.rotation.y = f.angle;
+                }
+                if (f.pointsObj) {
+                    f.pointsObj.position.set(f.x, f.y, f.z);
+                    f.pointsObj.rotation.y = f.angle;
+                    f.pointsObj.visible = pointMode;
+                }
+
+                updateLidarVisuals(f);
+
+                // ACCIONES LOGÍSTICAS AL ALCANZAR LOS DESTINOS (Playas o Racks)
+                if (nodeReached && f.target) {
+                    const task = f.target;
+
+                    if (task.type === 'PICK_BEACH' && task.stage === 1) {
+                        // Ha llegado a la Playa de Entrada dedicada. Cargar Palet.
+                        f.status = 'LOADING';
+
+                        setTimeout(() => {
+                            if (task.palletMesh) {
+                                solidGroup.remove(task.palletMesh);
+                            }
+
+                            const pVisual = createPalletVisual(task.cargo.color);
+                            pVisual.position.set(0, 0.1, 1.0);
+                            pVisual.name = "CARRETILLA_CARGO";
+                            f.forkGroup.add(pVisual);
+
+                            f.payload = {
+                                cargo: task.cargo,
+                                meshRef: pVisual
+                            };
+
+                            // Planificar ruta óptima a la estantería final esquivando racks
+                            f.path = getOptimizedPath(f.x, f.z, task.slot.x, task.slot.z > 0 ? task.slot.z - 3.2 : task.slot.z + 3.2);
+                            f.currentPathIndex = 0;
+                            f.target = {
+                                stage: 2,
+                                type: 'PLACE_RACK',
+                                x: task.slot.x,
+                                z: task.slot.z > 0 ? task.slot.z - 3.2 : task.slot.z + 3.2,
+                                y: task.slot.y,
+                                slot: task.slot,
+                                cargo: task.cargo
+                            };
+
+                            updateRFIDFeed(`BARCODE ESCANEADO: [${task.cargo.sku}] -> TRASPASO EN CURSO`);
+                            updateForkliftUI();
+                        }, 1200);
+
+                        f.path = [];
+
+                    } else if (task.type === 'PLACE_RACK' && task.stage === 2) {
+                        // Llegó enfrente del Rack. Elevar mástil y depositar.
+                        f.status = 'UNLOADING';
+
+                        let elevation = setInterval(() => {
+                            if (f.forkGroup.position.y < task.y) {
+                                f.forkGroup.position.y += 0.14;
+                            } else {
+                                clearInterval(elevation);
+
+                                setTimeout(() => {
+                                    const cVisual = f.forkGroup.getObjectByName("CARRETILLA_CARGO");
+                                    if(cVisual) f.forkGroup.remove(cVisual);
+
+                                    // Depositar palet físico final en rack
+                                    const pGroup = createPalletVisual(task.cargo.color);
+                                    pGroup.position.set(task.slot.x, task.slot.y, task.slot.z);
+                                    pGroup.name = `PALET-${task.slot.id}`;
+                                    solidGroup.add(pGroup);
+
+                                    palets.push({
+                                        id: task.slot.id,
+                                        shelfId: task.slot.id,
+                                        mesh: pGroup,
+                                        cargo: task.cargo,
+                                        x: task.slot.x,
+                                        y: task.slot.y,
+                                        z: task.slot.z
+                                    });
+
+                                    f.payload = null;
+
+                                    // Descargar mástil de seguridad
+                                    let lowering = setInterval(() => {
+                                        if (f.forkGroup.position.y > 0.2) {
+                                            f.forkGroup.position.y -= 0.14;
+                                        } else {
+                                            clearInterval(lowering);
+                                            f.forkGroup.position.y = 0.2;
+                                            f.status = 'IDLE';
+                                            f.path = [];
+                                            f.target = null;
+                                            f.totalTrips++;
+                                            updateKPIs();
+                                            updateForkliftUI();
+                                        }
+                                    }, 50);
+
+                                }, 1000);
+                            }
+                        }, 50);
+
+                        f.path = [];
+
+                    } else if (task.type === 'PICK_RACK' && task.stage === 1) {
+                        // Retirar del Rack para enviar. Elevar horquillas.
+                        f.status = 'LOADING';
+
+                        let elevation = setInterval(() => {
+                            if (f.forkGroup.position.y < task.y) {
+                                f.forkGroup.position.y += 0.14;
+                            } else {
+                                clearInterval(elevation);
+
+                                setTimeout(() => {
+                                    const physicalPallet = solidGroup.getObjectByName(`PALET-${task.slot.id}`);
+                                    if (physicalPallet) solidGroup.remove(physicalPallet);
+
+                                    const idx = palets.findIndex(p => p.shelfId === task.slot.id);
+                                    if (idx !== -1) palets.splice(idx, 1);
+
+                                    const pVisual = createPalletVisual(task.cargo.color);
+                                    pVisual.position.set(0, 0.1, 1.0);
+                                    pVisual.name = "CARRETILLA_CARGO";
+                                    f.forkGroup.add(pVisual);
+
+                                    f.payload = {
+                                        cargo: task.cargo,
+                                        meshRef: pVisual
+                                    };
+
+                                    // Ruta óptima y segura hacia la Playa de Salida dedicada
+                                    f.path = getOptimizedPath(f.x, f.z, task.deliverX, task.deliverZ);
+                                    f.currentPathIndex = 0;
+                                    f.target = {
+                                        stage: 2,
+                                        type: 'DELIVER_OUTBOUND',
+                                        x: task.deliverX,
+                                        z: task.deliverZ,
+                                        y: 0,
+                                        cargo: task.cargo
+                                    };
+
+                                    updateRFIDFeed(`RACK OUT: [${task.cargo.sku}] SACADO CON ÉXITO`);
+                                    updateForkliftUI();
+                                }, 1200);
+                            }
+                        }, 50);
+
+                        f.path = [];
+
+                    } else if (task.type === 'DELIVER_OUTBOUND' && task.stage === 2) {
+                        // Ha llegado a la Playa de Salida (Consolidación). Dejar palet allí.
+                        f.status = 'UNLOADING';
+
+                        setTimeout(() => {
+                            const cVisual = f.forkGroup.getObjectByName("CARRETILLA_CARGO");
+                            if(cVisual) f.forkGroup.remove(cVisual);
+
+                            // Pintar palet de expedición temporal en playa de salida
+                            const pOut = createPalletVisual(task.cargo.color);
+                            pOut.position.set(task.x, 0.1, task.z);
+                            solidGroup.add(pOut);
+
+                            outboundPallets.push({
+                                id: `OUTBOUND-PAL-${Date.now()}`,
+                                x: task.x,
+                                z: task.z,
+                                cargo: task.cargo,
+                                mesh: pOut
+                            });
+
+                            f.payload = null;
+
+                            // Bajar mástil
+                            let lowering = setInterval(() => {
+                                if (f.forkGroup.position.y > 0.2) {
+                                    f.forkGroup.position.y -= 0.14;
+                                } else {
+                                    clearInterval(lowering);
+                                    f.forkGroup.position.y = 0.2;
+                                    f.status = 'IDLE';
+                                    f.path = [];
+                                    f.target = null;
+                                    f.totalTrips++;
+
+                                    // Simular despacho final de mercancía (Se lo lleva el camión en unos segundos)
+                                    dispatchToTruck(task.x, task.z);
+
+                                    regenerateInboundPallet();
+                                    updateKPIs();
+                                    updateForkliftUI();
+                                }
+                            }, 50);
+
+                        }, 1200);
+
+                        f.path = [];
+                    }
+                }
+
+                // Drenaje de baterías dinámico
+                if (f.status !== 'IDLE') {
+                    f.battery = Math.max(5, f.battery - delta * 0.08);
+                }
+            });
+        }
+
+        // Simula la recogida final de la mercancía consolidada por parte del camión de despacho
+        function dispatchToTruck(beachX, beachZPos) {
+            setTimeout(() => {
+                const idx = outboundPallets.findIndex(p => p.x === beachX && p.z === beachZPos);
+                if (idx !== -1) {
+                    const palletObj = outboundPallets[idx];
+                    solidGroup.remove(palletObj.mesh);
+                    outboundPallets.splice(idx, 1);
+
+                    updateRFIDFeed(`EMBARCADO: SKU [${palletObj.cargo.sku}] SUBIDO AL CAMIÓN`);
+                    showNotification(`Despacho Finalizado`, `Carga <span class="font-bold text-emerald-400">${palletObj.cargo.sku}</span> enviada en ruta exterior.`);
+                }
+            }, 3000);
+        }
+
+        function regenerateInboundPallet() {
+            if (inboundPallets.length >= 3) return;
+
+            const activeZ = inboundPallets.map(p => p.z);
+            const freeZ = inboundBeachZLines.filter(z => !activeZ.includes(z));
+
+            if (freeZ.length > 0) {
+                const targetZ = freeZ[0];
+                const randCargo = cargoDatabase[Math.floor(Math.random() * cargoDatabase.length)];
+                
+                const pGroup = createPalletVisual(randCargo.color);
+                pGroup.position.set(inboundBeachX, 0.1, targetZ);
+                solidGroup.add(pGroup);
+
+                inboundPallets.push({
+                    id: `INBOUND-PAL-${Date.now()}`,
+                    x: inboundBeachX,
+                    z: targetZ,
+                    cargo: randCargo,
+                    mesh: pGroup
+                });
+            }
+        }
+
+        function updateLidarVisuals(forklift) {
+            const lines = forklift.lidarPoints;
+            if (!lines) return;
+
+            if (!pointMode) {
+                lines.visible = false;
+                return;
+            }
+            lines.visible = true;
+
+            const positionAttribute = lines.geometry.attributes.position;
+            const positions = positionAttribute.array;
+
+            const numRays = 24;
+            let pIdx = 0;
+
+            for (let i = 0; i < numRays; i++) {
+                const angle = (i / numRays) * Math.PI * 2 + forklift.angle;
+                
+                const startX = forklift.x;
+                const startY = forklift.y + 1.8;
+                const startZ = forklift.z;
+
+                let length = forklift.sensorRange * (0.7 + Math.random() * 0.3);
+
+                // Colisiones simplificadas con racks
+                shelves.forEach(shelf => {
+                    const dx = shelf.x - forklift.x;
+                    const dz = shelf.z - forklift.z;
+                    const distToShelf = Math.sqrt(dx*dx + dz*dz);
+                    
+                    if (distToShelf < forklift.sensorRange) {
+                        const angleToShelf = Math.atan2(dx, dz);
+                        let angleDiff = Math.abs(angle - angleToShelf);
+                        while (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+
+                        if (angleDiff < 0.2) {
+                            length = Math.min(length, distToShelf);
+                        }
+                    }
+                });
+
+                const endX = forklift.x + Math.sin(angle) * length;
+                const endY = startY + (Math.random() - 0.5) * 0.8;
+                const endZ = forklift.z + Math.cos(angle) * length;
+
+                positions[pIdx++] = startX;
+                positions[pIdx++] = startY;
+                positions[pIdx++] = startZ;
+
+                positions[pIdx++] = endX;
+                positions[pIdx++] = endY;
+                positions[pIdx++] = endZ;
+            }
+
+            positionAttribute.needsUpdate = true;
+        }
+
+        // --- MANEJO DE LA INTERFAZ HTML ---
+
+        function setupUIEvents() {
+            const btnPoints = document.getElementById('btn-render-points');
+            const btnSolid = document.getElementById('btn-render-solid');
+
+            btnPoints.addEventListener('click', () => {
+                toggleRenderMode(true);
+                btnPoints.className = "py-1.5 px-3 rounded text-xs font-medium bg-cyan-900/40 border border-cyan-500 text-cyan-200 hover:bg-cyan-900/60 transition-all font-mono";
+                btnSolid.className = "py-1.5 px-3 rounded text-xs font-medium bg-gray-950 border border-transparent text-gray-500 hover:bg-gray-900 hover:text-white transition-all font-mono";
+            });
+
+            btnSolid.addEventListener('click', () => {
+                toggleRenderMode(false);
+                btnSolid.className = "py-1.5 px-3 rounded text-xs font-medium bg-cyan-900/40 border border-cyan-500 text-cyan-200 hover:bg-cyan-900/60 transition-all font-mono";
+                btnPoints.className = "py-1.5 px-3 rounded text-xs font-medium bg-gray-950 border border-transparent text-gray-500 hover:bg-gray-900 hover:text-white transition-all font-mono";
+            });
+
+            const sliderSpeed = document.getElementById('slider-iot-speed');
+            const labelSpeed = document.getElementById('label-iot-speed');
+            sliderSpeed.addEventListener('input', (e) => {
+                simulationSpeed = parseFloat(e.target.value);
+                labelSpeed.innerText = `${simulationSpeed.toFixed(1)}x`;
+            });
+
+            document.getElementById('btn-reset-cam').addEventListener('click', () => {
+                selectedForkliftId = null;
+                document.querySelectorAll('.forklift-card').forEach(card => {
+                    card.className = "forklift-card glass-card p-3 rounded-lg border cursor-pointer transition-all duration-200 border-gray-800/80 hover:border-sky-950";
+                });
+                camera.position.set(-55, 38, 55);
+                controls.target.set(0, 0, 0);
+                showNotification("Cámara Restablecida", "Regresando a perspectiva aérea industrial.");
+            });
+
+            document.getElementById('btn-trigger-mission').addEventListener('click', () => {
+                generateAutomaticMission();
+            });
+        }
+
+        function toggleRenderMode(isPoints) {
+            pointMode = isPoints;
+            if (pointsSystem) pointsSystem.visible = isPoints;
+            if (solidGroup) {
+                solidGroup.children.forEach(mesh => {
+                    if (mesh.rotation.x === -Math.PI / 2) {
+                        mesh.material.opacity = isPoints ? 0.3 : 1.0;
+                        mesh.material.transparent = isPoints;
+                    } else {
+                        mesh.visible = !isPoints;
+                    }
+                });
+            }
+
+            forklifts.forEach(f => {
+                if (f.mesh) f.mesh.visible = !isPoints;
+                if (f.pointsObj) f.pointsObj.visible = isPoints;
+            });
+        }
+
+        function updateForkliftUI() {
+            const container = document.getElementById('forklift-list-container');
+            container.innerHTML = '';
+
+            forklifts.forEach(f => {
+                const isActive = selectedForkliftId === f.id;
+                
+                let statusBadge = '';
+                switch (f.status) {
+                    case 'IDLE':
+                        statusBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold bg-slate-900 text-slate-400 border border-slate-800">EN ESPERA</span>';
+                        break;
+                    case 'MOVING':
+                        statusBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold bg-sky-950/80 text-sky-400 border border-sky-850 animate-pulse">EN RUTA</span>';
+                        break;
+                    case 'LOADING':
+                        statusBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold bg-amber-950/80 text-amber-400 border border-amber-850">RFID LOCK</span>';
+                        break;
+                    case 'UNLOADING':
+                        statusBadge = '<span class="px-2 py-0.5 rounded text-[8px] font-bold bg-purple-950/80 text-purple-400 border border-purple-850">DESCARGA</span>';
+                        break;
+                }
+
+                let skuHTML = '';
+                if (f.payload && f.payload.cargo) {
+                    skuHTML = `
+                        <div class="mt-2 p-2 rounded bg-cyan-950/30 border border-cyan-850/60 font-mono">
+                            <p class="text-[8px] text-cyan-400 font-bold uppercase tracking-wider">Carga Activa (RFID)</p>
+                            <p class="text-[10px] font-bold text-gray-200 mt-0.5">${f.payload.cargo.sku}</p>
+                            <p class="text-[9px] text-gray-400 leading-tight truncate">${f.payload.cargo.name}</p>
+                        </div>
+                    `;
+                } else if (f.target && f.target.cargo) {
+                    skuHTML = `
+                        <div class="mt-2 p-2 rounded bg-gray-900/60 border border-gray-800 font-mono">
+                            <p class="text-[8px] text-gray-400 font-bold uppercase tracking-wider">Destino Asignado</p>
+                            <p class="text-[10px] font-bold text-gray-300 mt-0.5">${f.target.cargo.sku}</p>
+                            <p class="text-[9px] text-gray-500 leading-tight truncate">${f.target.cargo.name}</p>
+                        </div>
+                    `;
+                } else {
+                    skuHTML = `
+                        <div class="mt-2 text-[8px] text-gray-500 font-mono italic">
+                            Dispositivo libre - Esperando asignación WMS
+                        </div>
+                    `;
+                }
+
+                const card = document.createElement('div');
+                card.className = `forklift-card p-3 rounded-lg border cursor-pointer transition-all duration-200 ${
+                    isActive ? 'glass-card-active' : 'glass-card border-gray-800/80 hover:border-sky-950'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <i class="fa-solid fa-truck-pickup" style="color: ${f.colorHex}"></i>
+                            <span class="text-[11px] font-black font-orbitron text-gray-200">${f.id}</span>
+                        </div>
+                        ${statusBadge}
+                    </div>
+                    <p class="text-[9px] text-gray-500 mt-0.5">${f.name}</p>
+
+                    ${skuHTML}
+
+                    <div class="mt-2.5 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px] font-mono border-t border-sky-950/20 pt-2 text-gray-500">
+                        <div class="flex justify-between">
+                            <span>Batería:</span>
+                            <span class="${f.battery < 20 ? 'text-red-400 font-bold animate-pulse' : 'text-gray-300'}">${Math.round(f.battery)}%</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Viajes:</span>
+                            <span class="text-gray-300">${f.totalTrips}</span>
+                        </div>
+                        <div class="flex justify-between col-span-2">
+                            <span>Caja Negra:</span>
+                            <span class="text-cyan-400 font-bold">X:${f.x.toFixed(1)} Y:0 Z:${f.z.toFixed(1)}</span>
+                        </div>
+                    </div>
+                `;
+
+                card.addEventListener('click', () => {
+                    if (selectedForkliftId === f.id) {
+                        selectedForkliftId = null;
+                        showNotification("Cámara Liberada", "Monitoreo libre reestablecido.");
+                    } else {
+                        selectedForkliftId = f.id;
+                        showNotification(`Enfoque: ${f.id}`, `Cámara sincronizada con el sensor LiDAR.`);
+                    }
+                    updateForkliftUI();
+                });
+
+                container.appendChild(card);
+            });
+
+            const activeCount = forklifts.filter(f => f.status !== 'IDLE').length;
+            document.getElementById('kpi-active-forklifts').innerText = `${activeCount} / 3`;
+        }
+
+        function updateRFIDFeed(message) {
+            const feed = document.getElementById('rfid-scanner-feed');
+            feed.innerHTML = `<p class="text-sky-300 font-bold">&gt; ${message}</p>
+                             <p class="text-sky-500/50 mt-1">&gt; ESPERANDO SIGUIENTE EVENTO...</p>`;
+        }
+
+        function showNotification(title, message) {
+            const container = document.getElementById('notification-area');
+            const alert = document.createElement('div');
+            alert.className = "bg-gray-950/95 border-l-4 border-cyan-500 p-3 rounded shadow-2xl backdrop-blur-md transform translate-x-5 opacity-0 transition-all duration-300 max-w-xs pointer-events-auto border border-sky-950/50";
+            
+            alert.innerHTML = `
+                <div class="flex items-start gap-2.5">
+                    <i class="fa-solid fa-satellite-dish text-cyan-400 mt-0.5 animate-pulse"></i>
+                    <div>
+                        <p class="text-xs font-black text-gray-100 font-orbitron">${title}</p>
+                        <p class="text-[9px] text-gray-400 mt-0.5 leading-relaxed font-mono">${message}</p>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(alert);
+
+            setTimeout(() => {
+                alert.classList.remove('translate-x-5', 'opacity-0');
+            }, 30);
+
+            setTimeout(() => {
+                alert.classList.add('translate-x-10', 'opacity-0');
+                setTimeout(() => alert.remove(), 300);
+            }, 4000);
+        }
+
+        function updateKPIs() {
+            const totalTrips = forklifts.reduce((acc, f) => acc + f.totalTrips, 0);
+            document.getElementById('kpi-moves').innerText = 200 + totalTrips;
+
+            const currentEfficiency = (95 + Math.random() * 4).toFixed(1);
+            document.getElementById('kpi-efficiency').innerText = `${currentEfficiency}%`;
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const now = performance.now();
+            const delta = (now - lastTime) / 1000;
+            lastTime = now;
+
+            frameCount++;
+            if (now > lastFpsUpdate + 1000) {
+                document.getElementById('fps-counter').innerText = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
+                frameCount = 0;
+                lastFpsUpdate = now;
+            }
+
+            const activeSpeed = delta * simulationSpeed;
+
+            // Actualizar físicas logísticas
+            updatePhysics(activeSpeed);
+
+            // Efecto LiDAR
+            if (pointMode && pointsSystem) {
+                const positions = pointsSystem.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += (Math.random() - 0.5) * 0.002;
+                    positions[i + 2] += (Math.random() - 0.5) * 0.002;
+                }
+                pointsSystem.geometry.attributes.position.needsUpdate = true;
+            }
+
+            controls.update();
+
+            // Tracking activo de la cámara
+            if (selectedForkliftId) {
+                const targetFork = forklifts.find(f => f.id === selectedForkliftId);
+                if (targetFork) {
+                    const offset = new THREE.Vector3(-12, 10, -12).applyAxisAngle(new THREE.Vector3(0, 1, 0), targetFork.angle);
+                    const targetCam = new THREE.Vector3(targetFork.x, targetFork.y, targetFork.z).add(offset);
+                    camera.position.lerp(targetCam, 0.05);
+                    controls.target.lerp(new THREE.Vector3(targetFork.x, targetFork.y + 1, targetFork.z), 0.05);
+                }
+            }
+
+            const camX = Math.round(camera.position.x);
+            const camY = Math.round(camera.position.y);
+            const camZ = Math.round(camera.position.z);
+            document.getElementById('camera-pos-info').innerText = `X: ${camX}, Y: ${camY}, Z: ${camZ}`;
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            init();
+        };
+    </script>
+</body>
+</html>
